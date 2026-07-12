@@ -1,0 +1,6 @@
+OrderID,CustName,Amt,OrderDate,Status
+1,ALICE SMITH,100.00,01/05/2024,Shipped
+2,Bob Jones,250.75,01/06/2024,Shipped
+3,Carol White,75.25,01/07/2024,Pending
+4,Dave Brown,305.00,01/08/2024,Delivered
+6,Frank Green,90.00,01/10/2024,Shipped

@@ -1,0 +1,4 @@
+customer_id, customer_name ,signup_date,zip_code
+1,  John Doe ,2024-02-01,02139
+2,Jane Roe,2024-02-02,10001
+3, Sam Lee,2024-02-03,94107

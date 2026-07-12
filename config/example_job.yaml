@@ -1,0 +1,42 @@
+# Example reconciliation job.
+# Runnable as-is against the bundled sample data:
+#   python -m core.job_runner config/example_job.yaml --export report.xlsx
+#
+# For Snowflake, replace a source/target block with e.g.:
+#   source:
+#     type: snowflake
+#     table: ORDERS            # or query: "SELECT * FROM ORDERS WHERE ..."
+#     database: ANALYTICS      # optional; defaults come from .env
+#     schema: PUBLIC           # optional
+# Credentials are always read from environment variables (.env) — never
+# put passwords in job files.
+
+name: orders-recon-example
+
+source:
+  type: csv
+  path: tests/sample_data/source_orders.csv
+
+target:
+  type: csv
+  path: tests/sample_data/target_orders.csv
+
+key_columns:
+  - order_id
+
+# source column name -> target column name
+column_mapping:
+  order_id: OrderID
+  customer_name: CustName
+  amount: Amt
+  order_date: OrderDate
+  status: Status
+
+# optional per-column comparison rules (keyed by SOURCE column name)
+column_rules:
+  customer_name:
+    case_insensitive: true
+  amount:
+    tolerance: 0.01
+  order_date:
+    date_only: true

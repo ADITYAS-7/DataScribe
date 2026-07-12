@@ -1,0 +1,4 @@
+# DataScribe brand accent (teal sampled from the logo).
+# Applies to primary buttons, toggles, radios, sliders, and progress bars.
+[theme]
+primaryColor = "#12A8BC"
