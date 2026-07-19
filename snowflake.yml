@@ -20,4 +20,9 @@ entities:
       - connectors
       - core
       - assets
-      - environment.yml
+      # Kept under sis/ so Streamlit Community Cloud's dependency scanner
+      # doesn't mistake the repo for a conda project (it must keep using
+      # requirements.txt). The mapping restores the name SiS expects at the
+      # stage root.
+      - src: sis/environment.yml
+        dest: environment.yml

@@ -4,6 +4,13 @@
 # snowflake-snowpark-python) or that don't apply inside Snowflake
 # (snowflake-connector-python, python-dotenv: the app uses the ambient
 # session instead; see connectors/snowflake_connector.py).
+#
+# Lives under sis/ (not the repo root) on purpose: Streamlit Community
+# Cloud scans the repo root for dependency files, and a root-level
+# environment.yml makes it build a conda env from this SiS-only list,
+# which lacks the packages the Cloud deployment needs — the app then
+# fails to boot. snowflake.yml maps this file back to environment.yml
+# at the stage root during `snow streamlit deploy`.
 name: app_environment
 channels:
   - snowflake
