@@ -1,0 +1,15 @@
+# Conda environment for Streamlit in Snowflake (SiS). SiS installs
+# dependencies from the Snowflake Anaconda channel only — this list mirrors
+# requirements.txt minus packages SiS provides natively (streamlit,
+# snowflake-snowpark-python) or that don't apply inside Snowflake
+# (snowflake-connector-python, python-dotenv: the app uses the ambient
+# session instead; see connectors/snowflake_connector.py).
+name: app_environment
+channels:
+  - snowflake
+dependencies:
+  - pandas
+  - openpyxl
+  - pydantic
+  - pyyaml
+  - cryptography

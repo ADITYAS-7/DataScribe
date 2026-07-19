@@ -1,0 +1,23 @@
+# Snowflake CLI project definition for deploying DataScribe as a Streamlit
+# in Snowflake (SiS) app: `snow streamlit deploy`.
+#
+# Fill in <...> placeholders for your account before deploying, or pass the
+# equivalents as `snow` CLI flags (--database, --schema, --role, etc.).
+# See README.md "Deploying to Streamlit in Snowflake" for the full walkthrough.
+definition_version: 2
+entities:
+  datascribe:
+    type: streamlit
+    identifier:
+      name: DATASCRIBE
+    title: Data Scribe
+    query_warehouse: <WAREHOUSE_NAME>
+    main_file: ui/app.py
+    pages_dir: ui/
+    stage: streamlit_stage
+    artifacts:
+      - ui
+      - connectors
+      - core
+      - assets
+      - environment.yml

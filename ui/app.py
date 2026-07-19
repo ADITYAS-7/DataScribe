@@ -33,6 +33,22 @@ LOGO_DARK_PATH = PROJECT_ROOT / "assets" / "datascribe-lockup-dark.png"
 
 st.set_page_config(page_title="Data Scribe", page_icon=str(LOGO_LIGHT_PATH), layout="wide")
 
+
+def _in_sis() -> bool:
+    """True when running inside Streamlit in Snowflake — the viewer already
+    has an authenticated Snowflake session (their own SSO'd Snowsight
+    login), so the Snowflake picker doesn't need a credentials form at all."""
+    try:
+        from snowflake.snowpark.context import get_active_session
+
+        get_active_session()
+        return True
+    except Exception:
+        return False
+
+
+IN_SIS = _in_sis()
+
 UNMAPPED = "— not mapped —"
 
 
@@ -286,6 +302,19 @@ def _fetch_snowflake(form_values: dict) -> pd.DataFrame:
     return source.fetch()
 
 
+def _fetch_snowflake_sis(side: str, table: str, query: str) -> pd.DataFrame:
+    """SiS path: reuses the ambient Snowpark session (no credentials)."""
+    source = SnowflakeDataSource(
+        table=table or None,
+        query=query or None,
+        warehouse=st.session_state.get(f"{side}_sf_wh") or None,
+        database=st.session_state.get(f"{side}_sf_db") or None,
+        schema=st.session_state.get(f"{side}_sf_schema") or None,
+        role=st.session_state.get(f"{side}_sf_role") or None,
+    )
+    return source.fetch()
+
+
 def dataset_picker(side: str) -> pd.DataFrame | None:
     """Render the source/target picker for one side; return the fetched df."""
     state_key = f"{side}_df"
@@ -318,7 +347,37 @@ def dataset_picker(side: str) -> pd.DataFrame | None:
             except Exception as exc:
                 st.error(f"Could not read file: {exc}")
 
-    else:  # Snowflake
+    elif IN_SIS:  # Snowflake, running inside Streamlit in Snowflake
+        st.caption(
+            "Running inside Snowflake — using your logged-in session, "
+            "no credentials needed."
+        )
+        with st.form(f"{side}_snowflake_form"):
+            table = st.text_input("Table name", key=f"{side}_sf_table")
+            query = st.text_area(
+                "…or custom SQL query (leave table blank)", key=f"{side}_sf_query"
+            )
+            with st.expander("Advanced (optional overrides)"):
+                st.caption("Blank fields fall back to your session's defaults.")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.text_input("Warehouse", key=f"{side}_sf_wh")
+                    st.text_input("Database", key=f"{side}_sf_db")
+                with col2:
+                    st.text_input("Schema", key=f"{side}_sf_schema")
+                    st.text_input("Role", key=f"{side}_sf_role")
+            submitted = st.form_submit_button(f"Fetch {side}")
+
+        if submitted:
+            try:
+                with st.spinner("Fetching from Snowflake…"):
+                    df = _fetch_snowflake_sis(side, table, query)
+                st.session_state[state_key] = df
+                st.session_state[label_key] = table or "custom query"
+            except Exception as exc:
+                st.error(f"Snowflake fetch failed: {exc}")
+
+    else:  # Snowflake, running outside Snowflake (local dev, Streamlit Cloud, ...)
         if side == "target" and st.session_state.get("source_kind") == "Snowflake":
             if st.button(
                 "Auto-fill from source connection",

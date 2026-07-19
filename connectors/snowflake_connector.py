@@ -26,6 +26,17 @@ from connectors.base import DataSource
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
 
 
+def _active_session():
+    """Return the ambient Snowpark session when running inside Streamlit in
+    Snowflake (SiS), or None otherwise (local dev, Streamlit Cloud, ...)."""
+    try:
+        from snowflake.snowpark.context import get_active_session
+
+        return get_active_session()
+    except Exception:
+        return None
+
+
 class SnowflakeConfigError(ValueError):
     """Raised when required Snowflake connection settings are missing/invalid."""
 
@@ -46,6 +57,7 @@ class SnowflakeDataSource(DataSource):
         role: str | None = None,
         authenticator: str | None = None,
         load_env: bool = True,
+        session: object | None = None,
     ):
         if load_env:
             load_dotenv()
@@ -58,8 +70,12 @@ class SnowflakeDataSource(DataSource):
         self.role = role or os.getenv("SNOWFLAKE_ROLE")
 
         # Auth methods, in order of precedence:
+        #   - active Snowpark session (Streamlit in Snowflake): reuse the
+        #     viewer's already-SSO'd Snowsight session, no secret needed.
         #   - authenticator="externalbrowser": SSO via the identity provider
         #     (Okta, Azure AD, ...) in a browser window; no password needed.
+        #     Only viable when the connector runs on the same machine as the
+        #     browser, i.e. local dev — not a hosted server.
         #   - authenticator="https://<org>.okta.com": native Okta (password required).
         #   - key-pair / password (default "snowflake" authenticator).
         # Secrets are never stored beyond what's needed to connect.
@@ -69,6 +85,17 @@ class SnowflakeDataSource(DataSource):
         self._private_key_passphrase = private_key_passphrase or os.getenv(
             "SNOWFLAKE_PRIVATE_KEY_PASSPHRASE"
         )
+
+        # Explicit credentials mean the caller wants a *different* connection
+        # than the ambient session (e.g. a cross-account target) — honor that
+        # over auto-detecting an active session.
+        explicit_creds = any(
+            (account, user, self._password, self._private_key_path, self.authenticator)
+        )
+        self._session = session if session is not None else (
+            None if explicit_creds else _active_session()
+        )
+        self._uses_active_session = self._session is not None
 
         if table and query:
             raise ValueError("Pass either 'table' or 'query', not both.")
@@ -87,6 +114,9 @@ class SnowflakeDataSource(DataSource):
         return (self.authenticator or "").lower() == "externalbrowser"
 
     def _validate_required_settings(self) -> None:
+        # An active session (SiS) is already authenticated — nothing else required.
+        if self._uses_active_session:
+            return
         missing = [
             name
             for name, value in (
@@ -109,6 +139,14 @@ class SnowflakeDataSource(DataSource):
 
     def describe(self) -> str:
         target = self.table or "<custom query>"
+        if self._uses_active_session:
+            return (
+                "SnowflakeDataSource(session=active SiS session, "
+                f"warehouse={self.warehouse or 'session default'}, "
+                f"database={self.database or 'session default'}, "
+                f"schema={self.schema or 'session default'}, "
+                f"role={self.role or 'session default'}, target={target})"
+            )
         return (
             f"SnowflakeDataSource(account={self.account}, user={self.user}, "
             f"warehouse={self.warehouse}, database={self.database}, "
@@ -176,6 +214,8 @@ class SnowflakeDataSource(DataSource):
         return f"SELECT * FROM {qualified}"
 
     def fetch(self) -> pd.DataFrame:
+        if self._uses_active_session:
+            return self._fetch_via_session()
         conn = snowflake.connector.connect(**self._build_connect_kwargs())
         try:
             cursor = conn.cursor()
@@ -191,3 +231,17 @@ class SnowflakeDataSource(DataSource):
                 cursor.close()
         finally:
             conn.close()
+
+    def _fetch_via_session(self) -> pd.DataFrame:
+        # Overrides are optional here — the session already has a default
+        # warehouse/role from Snowsight. Validated against the same
+        # identifier pattern as table names before going into raw SQL.
+        if self.warehouse:
+            if not _IDENTIFIER_RE.match(self.warehouse):
+                raise SnowflakeConfigError(f"Invalid warehouse identifier: {self.warehouse!r}")
+            self._session.sql(f"USE WAREHOUSE {self.warehouse}").collect()
+        if self.role:
+            if not _IDENTIFIER_RE.match(self.role):
+                raise SnowflakeConfigError(f"Invalid role identifier: {self.role!r}")
+            self._session.sql(f"USE ROLE {self.role}").collect()
+        return self._session.sql(self._build_sql()).to_pandas()
