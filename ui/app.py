@@ -211,6 +211,18 @@ def _inject_theme_css() -> None:
             background-color: {p["bg2"]} !important;
             color: {p["text"]} !important;
         }}
+        /* Toasts keep Streamlit's native (light) background while the
+           stMarkdownContainer rule above recolors their text, so without
+           this they render white-on-white in dark mode. */
+        [data-testid="stToast"] {{
+            background-color: {p["bg2"]} !important;
+            color: {p["text"]} !important;
+            border: 1px solid {p["border"]} !important;
+        }}
+        [data-testid="stToast"] svg {{
+            fill: {p["text"]} !important;
+            color: {p["text"]} !important;
+        }}
         /* Sidebar controls: replace Streamlit's arrow icons (hardcoded dark,
            invisible on the dark theme) with a theme-colored cross to close
            and hamburger to open. */
