@@ -1,0 +1,46 @@
+# Enterprise use-case template — reconcile a Snowflake warehouse table
+# against a CSV extract from a source system. This is the shape a company
+# would actually schedule nightly. Fill in the <...> placeholders, put
+# Snowflake credentials in .env (see .env.example), then run:
+#
+#   python -m core.job_runner config/snowflake_to_csv_job.yaml --export report.xlsx
+#
+# Wrap that command in Task Scheduler / cron / Airflow to make it a
+# recurring, unattended reconciliation. Credentials NEVER go in this file.
+
+name: warehouse-vs-source-extract
+
+# SOURCE: a table (or custom query) in Snowflake.
+source:
+  type: snowflake
+  table: <ORDERS>                 # or use `query:` instead, e.g.
+  # query: "SELECT * FROM ORDERS WHERE order_date >= DATEADD(day, -1, CURRENT_DATE)"
+  database: <ANALYTICS>           # optional; falls back to .env
+  schema: <PUBLIC>                # optional; falls back to .env
+  warehouse: <COMPUTE_WH>         # optional; falls back to .env
+  # authenticator: externalbrowser  # workplace SSO (local runs only; see README)
+
+# TARGET: a CSV extract on disk.
+target:
+  type: csv
+  path: <path/to/source_system_extract.csv>
+
+key_columns:
+  - order_id
+
+# source (Snowflake) column name -> target (CSV) column name
+column_mapping:
+  order_id: order_id
+  customer_name: customer_name
+  amount: amount
+  order_date: order_date
+  status: status
+
+# Real-world tolerances so cosmetic differences don't show as breaks.
+column_rules:
+  amount:
+    tolerance: 0.01          # ignore sub-cent rounding
+  customer_name:
+    case_insensitive: true   # "ACME" vs "Acme"
+  order_date:
+    date_only: true          # ignore time-of-day / format differences

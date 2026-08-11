@@ -1,0 +1,35 @@
+# Demo job B — the SAME source/target data as example_job.yaml, but with
+# NO column rules (strict, exact-match comparison). Runs as-is:
+#
+#   python -m core.job_runner config/orders_strict_job.yaml
+#
+# Point for the demo: example_job.yaml (with rules) reports 2 matched /
+# 2 mismatched; this file (no rules) reports 1 matched / 3 mismatched.
+# The ONLY thing that changed is the rules in this text file, no code —
+# dropping the case-insensitive rule flips "Alice Smith" vs "ALICE SMITH"
+# from a match to a mismatch. That is the "config-driven, generic per
+# client" story in one command.
+
+name: orders-recon-strict
+
+source:
+  type: csv
+  path: tests/sample_data/source_orders.csv
+
+target:
+  type: csv
+  path: tests/sample_data/target_orders.csv
+
+key_columns:
+  - order_id
+
+column_mapping:
+  order_id: OrderID
+  customer_name: CustName
+  amount: Amt
+  order_date: OrderDate
+  status: Status
+
+# No column_rules: every mapped column must match exactly. "ALICE SMITH"
+# vs "Alice Smith", 250.50 vs 250.75, and 01/05/2024 vs 2024-01-05 all
+# count as mismatches here.
