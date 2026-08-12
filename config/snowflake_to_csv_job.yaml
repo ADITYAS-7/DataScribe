@@ -8,39 +8,44 @@
 # Wrap that command in Task Scheduler / cron / Airflow to make it a
 # recurring, unattended reconciliation. Credentials NEVER go in this file.
 
+
+#DOESN'T WORK ON THE HNZ FIREWALL
+
+
+
 name: warehouse-vs-source-extract
 
 # SOURCE: a table (or custom query) in Snowflake.
 source:
   type: snowflake
-  table: <ORDERS>                 # or use `query:` instead, e.g.
+  table: Stores                 # or use `query:` instead, e.g.
   # query: "SELECT * FROM ORDERS WHERE order_date >= DATEADD(day, -1, CURRENT_DATE)"
-  database: <ANALYTICS>           # optional; falls back to .env
-  schema: <PUBLIC>                # optional; falls back to .env
-  warehouse: <COMPUTE_WH>         # optional; falls back to .env
+  # database / schema / warehouse fall back to .env when omitted here.
   # authenticator: externalbrowser  # workplace SSO (local runs only; see README)
 
 # TARGET: a CSV extract on disk.
 target:
   type: csv
-  path: <path/to/source_system_extract.csv>
+  path: tests\sample_data\Stores_target.csv
 
 key_columns:
-  - order_id
+  - STOREID
 
 # source (Snowflake) column name -> target (CSV) column name
 column_mapping:
-  order_id: order_id
-  customer_name: customer_name
-  amount: amount
-  order_date: order_date
-  status: status
-
+  STOREID: STOREID
+  STORENAME: STORENAME
+  ADDRESS: ADDRESS
+  CITY: CITY
+  STATE: STATE
+  ZIPCODE: ZIPCODE
+  EMAIL: EMAIL
+  PHONE: PHONE
+  UPDATED_AT: UPDATED_AT
 # Real-world tolerances so cosmetic differences don't show as breaks.
+# NOTE: every column named here must also appear in column_mapping above.
 column_rules:
-  amount:
-    tolerance: 0.01          # ignore sub-cent rounding
-  customer_name:
-    case_insensitive: true   # "ACME" vs "Acme"
-  order_date:
+  STORENAME:
+    case_insensitive: true   # "ACME Store" vs "Acme store"
+  UPDATED_AT:
     date_only: true          # ignore time-of-day / format differences

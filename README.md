@@ -38,6 +38,80 @@ pip install -r requirements.txt
 copy .env.example .env   # fill in Snowflake credentials if using it
 ```
 
+## Deploying to Streamlit in Snowflake (SiS)
+
+SiS is the recommended production path: the app runs **inside** Snowflake and
+reuses each viewer's already-authenticated Snowsight session, so corporate SSO
+works with zero extra wiring and **no credentials or `.env` are deployed**. The
+connector auto-detects the ambient Snowpark session and skips the credentials
+path entirely (`connectors/snowflake_connector.py`), and the UI hides the
+credentials form when it detects SiS (`ui/app.py`, `_in_sis()`).
+
+### Prerequisites
+
+- **Snowflake CLI** (`snow`): `pip install snowflake-cli-labs`, then configure a
+  connection (`snow connection add`). For SSO, choose
+  `authenticator=externalbrowser`.
+- A **role with `CREATE STREAMLIT`** on the target database/schema.
+- A **warehouse** you have `USAGE` on (used as the app's `query_warehouse`).
+- A **database + schema** to host the Streamlit object and its stage.
+- **`SELECT`** on the tables users will reconcile (this is the app's *runtime*
+  privilege, separate from the deploy privilege above).
+
+### One required edit
+
+Set a real warehouse in `snowflake.yml`:
+
+```yaml
+query_warehouse: <WAREHOUSE_NAME>   # replace before deploying
+```
+
+Everything else in `snowflake.yml` is ready: it bundles `ui/`, `connectors/`,
+`core/`, and `assets/`, and remaps `sis/environment.yml` → `environment.yml` at
+the stage root.
+
+### Dependencies in SiS
+
+SiS installs packages from the **Snowflake Anaconda channel only** — not
+`requirements.txt`. That list lives in `sis/environment.yml` (pandas, openpyxl,
+pydantic, pyyaml, cryptography). It intentionally omits packages SiS provides
+natively (`streamlit`, `snowflake-snowpark-python`) or that don't apply inside
+Snowflake (`snowflake-connector-python`, `python-dotenv`).
+
+> **Do not move `environment.yml` to the repo root.** A root-level copy makes
+> Streamlit Community Cloud build the wrong env and the app fails to boot. It
+> stays under `sis/`; `snowflake.yml` maps it back at deploy time.
+
+### Deploy
+
+```
+snow connection test --connection <name>
+
+snow streamlit deploy --replace \
+  --database <APP_DB> --schema <APP_SCHEMA> --role <ROLE_WITH_CREATE_STREAMLIT>
+```
+
+`--replace` makes redeploys idempotent. On success `snow` prints the app URL;
+the app also appears under **Projects → Streamlit** in Snowsight.
+
+### Verify
+
+- Open the app in Snowsight — it should load with **no credentials form**
+  (confirms SiS session detection).
+- Reconcile two tables you have `SELECT` on; confirm the summary and Excel
+  export work.
+- Have a second user open it to confirm SSO/session inheritance (they need
+  `USAGE` on the Streamlit object and read access to the data).
+
+### Notes / limitations
+
+- The app runs with the **owner's rights** by default — the owner's role must be
+  able to read every schema users reconcile.
+- **Cross-account** Snowflake-to-Snowflake reconciliation isn't supported; both
+  sides must be in the same account.
+- SiS is the interactive UI only. Scheduled/unattended recon is a separate path
+  (`run_job()` driven from Airflow/cron) and is not part of the SiS deployment.
+
 ## Running tests
 
 ```
